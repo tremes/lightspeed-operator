@@ -597,6 +597,11 @@ spec:
             displayName: Overall Status
             path: overallStatus
         version: v1alpha1
+      - description: Cluster-scoped runtime configuration for the alerts adapter.
+        displayName: Alerts Adapter Config
+        kind: AlertsAdapterConfig
+        name: alertsadapterconfigs.ols.openshift.io
+        version: v1alpha1
   description: |-
     OpenShift Lightspeed Operator provides generative AI-based virtual assistant which integrates into the OpenShift web console. OpenShift Lightspeed can answer natural language questions related to OpenShift Container Platform.
 

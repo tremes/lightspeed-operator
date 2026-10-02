@@ -3,6 +3,7 @@
 # It should be run by config/default
 resources:
 - bases/ols.openshift.io_olsconfigs.yaml
+- bases/ols.openshift.io_alertsadapterconfigs.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patches:
