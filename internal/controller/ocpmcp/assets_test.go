@@ -10,6 +10,7 @@ import (
 	monv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -42,7 +43,7 @@ var _ = Describe("OpenShift MCP Server assets", func() {
 		// resources_create_or_update. See OLS-4630.
 		Expect(toml).To(ContainSubstring("read_only = false"))
 		Expect(toml).To(ContainSubstring("disable_destructive = false"))
-		Expect(toml).To(ContainSubstring(`toolsets = ["core", "config", "helm", "observability/metrics", "observability/traces", "kubevirt", "netobserv"]`))
+		Expect(toml).To(ContainSubstring(`toolsets = ["core", "config", "helm", "observability/metrics", "observability/traces", "observability/incidents", "kubevirt", "netobserv"]`))
 		Expect(strings.Count(toml, `"netobserv"`)).To(Equal(1))
 		Expect(toml).NotTo(MatchRegexp(`(?m)^\[toolset_configs\.(?:"netobserv"|netobserv)\]`))
 		Expect(toml).To(ContainSubstring(`experimental_enable_target_compatibility_tool_filters = true`))
@@ -105,6 +106,32 @@ var _ = Describe("OpenShift MCP Server assets", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(sa.Name).To(Equal(utils.OpenShiftMCPServerServiceAccountName))
 		Expect(sa.Namespace).To(Equal(utils.OLSNamespaceDefault))
+	})
+
+	It("should generate the monitoring uiplugin ClusterRole and ClusterRoleBinding", func() {
+		role, err := GenerateMonitoringUIPluginClusterRole(testReconcilerInstance, testCR)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(role.Name).To(Equal(utils.OpenShiftMCPServerMonitoringUIPluginRoleName))
+		Expect(role.Rules).To(ConsistOf(rbacv1.PolicyRule{
+			APIGroups:     []string{"observability.openshift.io"},
+			Resources:     []string{"uiplugins"},
+			ResourceNames: []string{"monitoring"},
+			Verbs:         []string{"get"},
+		}))
+
+		rb, err := GenerateMonitoringUIPluginClusterRoleBinding(testReconcilerInstance, testCR)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(rb.Name).To(Equal(utils.OpenShiftMCPServerMonitoringUIPluginRoleName))
+		Expect(rb.Subjects).To(ConsistOf(rbacv1.Subject{
+			Kind:      "ServiceAccount",
+			Name:      utils.OpenShiftMCPServerServiceAccountName,
+			Namespace: utils.OLSNamespaceDefault,
+		}))
+		Expect(rb.RoleRef).To(Equal(rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "ClusterRole",
+			Name:     utils.OpenShiftMCPServerMonitoringUIPluginRoleName,
+		}))
 	})
 
 	It("should return config volume and mount for --config", func() {

@@ -625,6 +625,10 @@ ssl_ca_file = '/etc/certs/cm-olspostgresca/service-ca.crt'
 	OpenShiftMCPServerComponentLabel = "openshift-mcp-server"
 	// OpenShiftMCPServerServiceMonitorName is the ServiceMonitor for scraping MCP server metrics.
 	OpenShiftMCPServerServiceMonitorName = "openshift-mcp-server-monitor"
+	// OpenShiftMCPServerMonitoringUIPluginRoleName is the ClusterRole/ClusterRoleBinding
+	// name granting the MCP server access to the monitoring ConsoleUIPlugin
+	// (observability/incidents toolset).
+	OpenShiftMCPServerMonitoringUIPluginRoleName = "openshift-mcp-server-monitoring-uiplugin"
 	// OpenShiftMCPServerMetricsPath is the Prometheus metrics endpoint path on the MCP server.
 	OpenShiftMCPServerMetricsPath = "/metrics"
 	// RHOOKPHTTPPort is the Solr HTTP proxy port for the RH OKP sidecar (remapped from image default 8080).

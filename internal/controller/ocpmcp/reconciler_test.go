@@ -11,6 +11,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -68,6 +69,29 @@ var _ = Describe("OpenShift MCP Server reconciler", Ordered, func() {
 			}, sa)
 			Expect(err).NotTo(HaveOccurred())
 			expectOwnedByOLSConfig(sa)
+		})
+
+		It("should create the MCP monitoring uiplugin ClusterRole and ClusterRoleBinding", func() {
+			role := &rbacv1.ClusterRole{}
+			err := k8sClient.Get(ctx, types.NamespacedName{Name: utils.OpenShiftMCPServerMonitoringUIPluginRoleName}, role)
+			Expect(err).NotTo(HaveOccurred())
+			expectOwnedByOLSConfig(role)
+			Expect(role.Rules).To(ConsistOf(rbacv1.PolicyRule{
+				APIGroups:     []string{"observability.openshift.io"},
+				Resources:     []string{"uiplugins"},
+				ResourceNames: []string{"monitoring"},
+				Verbs:         []string{"get"},
+			}))
+
+			rb := &rbacv1.ClusterRoleBinding{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: utils.OpenShiftMCPServerMonitoringUIPluginRoleName}, rb)
+			Expect(err).NotTo(HaveOccurred())
+			expectOwnedByOLSConfig(rb)
+			Expect(rb.Subjects).To(ConsistOf(rbacv1.Subject{
+				Kind:      "ServiceAccount",
+				Name:      utils.OpenShiftMCPServerServiceAccountName,
+				Namespace: utils.OLSNamespaceDefault,
+			}))
 		})
 
 		It("should create the MCP NetworkPolicy with narrow Prometheus ingress", func() {
@@ -296,6 +320,14 @@ var _ = Describe("OpenShift MCP Server reconciler", Ordered, func() {
 				Namespace: utils.OLSNamespaceDefault,
 			}, sa)
 			Expect(apierrors.IsNotFound(err)).To(BeTrue(), "service account should be deleted")
+
+			role := &rbacv1.ClusterRole{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: utils.OpenShiftMCPServerMonitoringUIPluginRoleName}, role)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue(), "monitoring uiplugin cluster role should be deleted")
+
+			rb := &rbacv1.ClusterRoleBinding{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: utils.OpenShiftMCPServerMonitoringUIPluginRoleName}, rb)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue(), "monitoring uiplugin cluster role binding should be deleted")
 
 			np := &networkingv1.NetworkPolicy{}
 			err = k8sClient.Get(ctx, types.NamespacedName{

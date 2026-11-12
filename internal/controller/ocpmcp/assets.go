@@ -9,6 +9,7 @@ import (
 	monv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -20,7 +21,8 @@ import (
 
 // configTOML is the openshift-mcp-server runtime config.
 // Denied resources keep Secret (and RBAC) data out of the LLM path; toolsets are pinned
-// so upstream default changes do not affect OLS. Observability metrics uses in-cluster Thanos/Alertmanager.
+// so upstream default changes do not affect OLS. Observability metrics uses in-cluster Thanos/Alertmanager;
+// observability/incidents reads the monitoring ConsoleUIPlugin with the pod service account.
 // NetObserv is always configured; the OCP MCP server's compatibility filters control tool visibility.
 // read_only = false and disable_destructive = false are required: openshift-mcp-server-rhel9 sets
 // ReadOnly=true and DisableDestructive=true in build-time defaults. read_only=true exposes only
@@ -38,7 +40,7 @@ tls_cert = "%s"
 tls_key = "%s"
 read_only = false
 disable_destructive = false
-toolsets = ["core", "config", "helm", "observability/metrics", "observability/traces", "kubevirt", "netobserv"]
+toolsets = ["core", "config", "helm", "observability/metrics", "observability/traces", "observability/incidents", "kubevirt", "netobserv"]
 experimental_enable_target_compatibility_tool_filters = true
 
 [[denied_resources]]
@@ -74,13 +76,67 @@ func selectorLabels() map[string]string {
 }
 
 // GenerateServiceAccount generates the standalone MCP server ServiceAccount.
-// The SA has no RBAC bindings; callers pass through their own token.
+// Callers pass through their own token; the only RBAC binding is the monitoring
+// uiplugin ClusterRole required by the observability/incidents toolset.
 func GenerateServiceAccount(r reconciler.Reconciler, cr *olsv1alpha1.OLSConfig) (*corev1.ServiceAccount, error) {
 	sa, err := utils.GenerateServiceAccount(r, cr, utils.OpenShiftMCPServerServiceAccountName)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", utils.ErrGenerateOpenShiftMCPServerServiceAccount, err)
 	}
 	return sa, nil
+}
+
+// GenerateMonitoringUIPluginClusterRole generates the ClusterRole granting the
+// MCP server service account read access to the monitoring ConsoleUIPlugin,
+// required by the observability/incidents toolset.
+func GenerateMonitoringUIPluginClusterRole(r reconciler.Reconciler, cr *olsv1alpha1.OLSConfig) (*rbacv1.ClusterRole, error) {
+	role := rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: utils.OpenShiftMCPServerMonitoringUIPluginRoleName,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups:     []string{"observability.openshift.io"},
+				Resources:     []string{"uiplugins"},
+				ResourceNames: []string{"monitoring"},
+				Verbs:         []string{"get"},
+			},
+		},
+	}
+
+	if err := controllerutil.SetControllerReference(cr, &role, r.GetScheme()); err != nil {
+		return nil, err
+	}
+
+	return &role, nil
+}
+
+// GenerateMonitoringUIPluginClusterRoleBinding binds the monitoring uiplugin
+// ClusterRole to the openshift-mcp-server service account.
+func GenerateMonitoringUIPluginClusterRoleBinding(r reconciler.Reconciler, cr *olsv1alpha1.OLSConfig) (*rbacv1.ClusterRoleBinding, error) {
+	rb := rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: utils.OpenShiftMCPServerMonitoringUIPluginRoleName,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      utils.OpenShiftMCPServerServiceAccountName,
+				Namespace: r.GetNamespace(),
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "ClusterRole",
+			Name:     utils.OpenShiftMCPServerMonitoringUIPluginRoleName,
+		},
+	}
+
+	if err := controllerutil.SetControllerReference(cr, &rb, r.GetScheme()); err != nil {
+		return nil, err
+	}
+
+	return &rb, nil
 }
 
 // GenerateConfigMap generates the TOML ConfigMap for openshift-mcp-server.

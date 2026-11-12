@@ -137,6 +137,14 @@ rules:
   - update
   - watch
 - apiGroups:
+  - observability.openshift.io
+  resourceNames:
+  - monitoring
+  resources:
+  - uiplugins
+  verbs:
+  - get
+- apiGroups:
   - ols.openshift.io
   resources:
   - olsconfigs
@@ -179,6 +187,7 @@ rules:
   - lightspeed-app-server-sar-role-binding
   - lightspeed-operator-ols-metrics-reader
   - lightspeed-otel-dataverse-exporter-binding
+  - openshift-mcp-server-monitoring-uiplugin
   resources:
   - clusterrolebindings
   verbs:
@@ -203,6 +212,7 @@ rules:
   - lightspeed-app-server-sar-role
   - lightspeed-otel-dataverse-exporter
   - lightspeed-otel-dataverse-exporter-pull-secret
+  - openshift-mcp-server-monitoring-uiplugin
   resources:
   - clusterroles
   verbs:

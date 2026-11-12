@@ -9,6 +9,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -23,6 +24,8 @@ func ReconcileResources(r reconciler.Reconciler, ctx context.Context, olsconfig 
 	return utils.RunReconcileTasks(r, ctx, olsconfig, "reconcileOpenShiftMCPServerResources", []utils.ReconcileTask{
 		{Name: "reconcile openshift-mcp-server ConfigMap", Task: reconcileConfigMap},
 		{Name: "reconcile openshift-mcp-server ServiceAccount", Task: reconcileServiceAccount},
+		{Name: "reconcile openshift-mcp-server monitoring uiplugin ClusterRole", Task: reconcileMonitoringUIPluginClusterRole},
+		{Name: "reconcile openshift-mcp-server monitoring uiplugin ClusterRoleBinding", Task: reconcileMonitoringUIPluginClusterRoleBinding},
 		{Name: "reconcile openshift-mcp-server NetworkPolicy", Task: reconcileNetworkPolicy},
 		{Name: "remove legacy openshift-mcp-server CA ConfigMap", Task: removeLegacyCAConfigMap},
 	}, true)
@@ -46,6 +49,8 @@ func Remove(r reconciler.Reconciler, ctx context.Context) error {
 		{Name: "delete openshift-mcp-server network policy", Task: deleteNetworkPolicy},
 		{Name: "delete openshift-mcp-server configmap", Task: deleteConfigMap},
 		{Name: "delete openshift-mcp-server service account", Task: deleteServiceAccount},
+		{Name: "delete openshift-mcp-server monitoring uiplugin ClusterRoleBinding", Task: deleteMonitoringUIPluginClusterRoleBinding},
+		{Name: "delete openshift-mcp-server monitoring uiplugin ClusterRole", Task: deleteMonitoringUIPluginClusterRole},
 		{Name: "delete openshift-mcp-server TLS secret", Task: deleteTLSSecret},
 		{Name: "delete openshift-mcp-server ServiceMonitor", Task: deleteServiceMonitor},
 		{Name: "delete legacy openshift-mcp-server CA ConfigMap", Task: deleteLegacyCAConfigMap},
@@ -103,6 +108,48 @@ func reconcileServiceAccount(r reconciler.Reconciler, ctx context.Context, cr *o
 	}
 
 	r.GetLogger().Info("openshift-mcp-server service account reconciled", "serviceAccount", sa.Name)
+	return nil
+}
+
+func reconcileMonitoringUIPluginClusterRole(r reconciler.Reconciler, ctx context.Context, cr *olsv1alpha1.OLSConfig) error {
+	role, err := GenerateMonitoringUIPluginClusterRole(r, cr)
+	if err != nil {
+		return fmt.Errorf("%s: %w", utils.ErrGenerateOpenShiftMCPServerMonitoringUIPluginRole, err)
+	}
+
+	foundRole := &rbacv1.ClusterRole{}
+	err = r.Get(ctx, client.ObjectKey{Name: role.Name}, foundRole)
+	if err != nil && errors.IsNotFound(err) {
+		r.GetLogger().Info("creating openshift-mcp-server monitoring uiplugin cluster role", "ClusterRole", role.Name)
+		if err := r.Create(ctx, role); err != nil {
+			return fmt.Errorf("%s: %w", utils.ErrCreateOpenShiftMCPServerMonitoringUIPluginRole, err)
+		}
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("%s: %w", utils.ErrGetOpenShiftMCPServerMonitoringUIPluginRole, err)
+	}
+	r.GetLogger().Info("openshift-mcp-server monitoring uiplugin cluster role reconciled", "ClusterRole", role.Name)
+	return nil
+}
+
+func reconcileMonitoringUIPluginClusterRoleBinding(r reconciler.Reconciler, ctx context.Context, cr *olsv1alpha1.OLSConfig) error {
+	rb, err := GenerateMonitoringUIPluginClusterRoleBinding(r, cr)
+	if err != nil {
+		return fmt.Errorf("%s: %w", utils.ErrGenerateOpenShiftMCPServerMonitoringUIPluginRoleBinding, err)
+	}
+
+	foundRB := &rbacv1.ClusterRoleBinding{}
+	err = r.Get(ctx, client.ObjectKey{Name: rb.Name}, foundRB)
+	if err != nil && errors.IsNotFound(err) {
+		r.GetLogger().Info("creating openshift-mcp-server monitoring uiplugin cluster role binding", "ClusterRoleBinding", rb.Name)
+		if err := r.Create(ctx, rb); err != nil {
+			return fmt.Errorf("%s: %w", utils.ErrCreateOpenShiftMCPServerMonitoringUIPluginRoleBinding, err)
+		}
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("%s: %w", utils.ErrGetOpenShiftMCPServerMonitoringUIPluginRoleBinding, err)
+	}
+	r.GetLogger().Info("openshift-mcp-server monitoring uiplugin cluster role binding reconciled", "ClusterRoleBinding", rb.Name)
 	return nil
 }
 
@@ -212,6 +259,20 @@ func deleteTLSSecret(r reconciler.Reconciler, ctx context.Context) error {
 	return deleteNamespacedObject(r, ctx, &corev1.Secret{}, utils.OpenShiftMCPServerCertsSecretName)
 }
 
+func deleteMonitoringUIPluginClusterRole(r reconciler.Reconciler, ctx context.Context) error {
+	if err := deleteClusterObject(r, ctx, &rbacv1.ClusterRole{}, utils.OpenShiftMCPServerMonitoringUIPluginRoleName); err != nil {
+		return fmt.Errorf("%s: %w", utils.ErrDeleteOpenShiftMCPServerMonitoringUIPluginRole, err)
+	}
+	return nil
+}
+
+func deleteMonitoringUIPluginClusterRoleBinding(r reconciler.Reconciler, ctx context.Context) error {
+	if err := deleteClusterObject(r, ctx, &rbacv1.ClusterRoleBinding{}, utils.OpenShiftMCPServerMonitoringUIPluginRoleName); err != nil {
+		return fmt.Errorf("%s: %w", utils.ErrDeleteOpenShiftMCPServerMonitoringUIPluginRoleBinding, err)
+	}
+	return nil
+}
+
 // removeLegacyCAConfigMap deletes the pre-handoff MCP inject-cabundle ConfigMap left on upgrade.
 func removeLegacyCAConfigMap(r reconciler.Reconciler, ctx context.Context, _ *olsv1alpha1.OLSConfig) error {
 	return deleteLegacyCAConfigMap(r, ctx)
@@ -230,6 +291,21 @@ func deleteLegacyCAConfigMap(r reconciler.Reconciler, ctx context.Context) error
 		return fmt.Errorf("failed to delete legacy openshift-mcp-server CA ConfigMap: %w", err)
 	}
 	r.GetLogger().Info("deleted legacy openshift-mcp-server CA ConfigMap", "configmap", cm.Name)
+	return nil
+}
+
+// deleteClusterObject deletes a cluster-scoped object if it exists.
+func deleteClusterObject(r reconciler.Reconciler, ctx context.Context, obj client.Object, name string) error {
+	err := r.Get(ctx, client.ObjectKey{Name: name}, obj)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	if err := r.Delete(ctx, obj); err != nil && !errors.IsNotFound(err) {
+		return err
+	}
 	return nil
 }
 

@@ -140,10 +140,12 @@ const finalizerCleanupTimeout = 3 * time.Minute
 // RBAC: split create (cannot use resourceNames) from get/update/delete (pinned to named resources) (OLS-3886)
 // list+watch must be unscoped because Owns() sets up a cluster-wide informer that lists all resources of the type
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;clusterrolebindings,verbs=create;list;watch
-// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,resourceNames=lightspeed-app-server-sar-role;lightspeed-agentic-alerts-adapter-agenticruns;lightspeed-agentic-alerts-adapter-agenticolsconfig;lightspeed-otel-dataverse-exporter;lightspeed-otel-dataverse-exporter-pull-secret,verbs=get;update;delete
-// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,resourceNames=lightspeed-app-server-sar-role-binding;lightspeed-agentic-alerts-adapter-agenticruns;lightspeed-agentic-alerts-adapter-agenticolsconfig;lightspeed-operator-ols-metrics-reader;lightspeed-otel-dataverse-exporter-binding,verbs=get;update;delete
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,resourceNames=lightspeed-app-server-sar-role;lightspeed-agentic-alerts-adapter-agenticruns;lightspeed-agentic-alerts-adapter-agenticolsconfig;lightspeed-otel-dataverse-exporter;lightspeed-otel-dataverse-exporter-pull-secret;openshift-mcp-server-monitoring-uiplugin,verbs=get;update;delete
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,resourceNames=lightspeed-app-server-sar-role-binding;lightspeed-agentic-alerts-adapter-agenticruns;lightspeed-agentic-alerts-adapter-agenticolsconfig;lightspeed-operator-ols-metrics-reader;lightspeed-otel-dataverse-exporter-binding;openshift-mcp-server-monitoring-uiplugin,verbs=get;update;delete
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=create;list;watch
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,resourceNames=lightspeed-agentic-alerts-adapter-alertmanager;lightspeed-otel-dataverse-exporter-pull-secret,verbs=get;update;delete
+// Monitoring UIPlugin for openshift-mcp-server ClusterRole (operator must hold permissions it grants)
+// +kubebuilder:rbac:groups=observability.openshift.io,resources=uiplugins,resourceNames=monitoring,verbs=get
 // AgenticRun API for alerts adapter ClusterRole (operator must hold permissions it grants to operands)
 // +kubebuilder:rbac:groups=agentic.openshift.io,resources=agenticruns,verbs=get;list;create
 // +kubebuilder:rbac:groups=agentic.openshift.io,resources=agenticolsconfigs,verbs=get
